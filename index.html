@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16342c">
+<title>Expense Tracker</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+  :root{
+    --bg:#eef1ec; --paper:#fbfcfa; --ink:#14231f; --muted:#5f6f69; --line:#d8ded9;
+    --deep:#16342c; --deep-2:#1f4a3e; --spent:#e0833a; --ok:#7fc8a4; --danger:#b3382c;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family: ui-rounded, "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    min-height:100vh; padding-bottom:env(safe-area-inset-bottom);
+  }
+  .wrap{max-width:560px;margin:0 auto}
+  button,input{font:inherit;color:inherit}
+  button{cursor:pointer;border:0;background:none}
+  :focus-visible{outline:3px solid var(--spent);outline-offset:2px}
+
+  .warn{background:#ffe9d6;color:#6b2d00;padding:12px 18px;font-size:.9rem;line-height:1.4;display:none}
+  .warn.show{display:block}
+
+  /* Balance panel */
+  .panel{
+    background:var(--deep); color:#f1f6f3;
+    padding:max(env(safe-area-inset-top),18px) 22px 26px;
+    border-radius:0 0 28px 28px;
+  }
+  .topline{display:flex;justify-content:space-between;align-items:center;font-size:.95rem;color:#b9cfc6}
+  .gear{color:#b9cfc6;font-size:.95rem;padding:6px 0 6px 12px}
+  .balance-label{margin-top:20px;font-size:.95rem;color:#b9cfc6}
+  .balance{font-size:clamp(2.4rem,11vw,3.4rem);font-weight:700;letter-spacing:-.02em;line-height:1.1;margin-top:2px;word-break:break-all}
+  .balance.low{color:#ffb38a}
+  .month{margin-top:22px}
+  .month-row{display:flex;justify-content:space-between;font-size:.9rem;color:#cfe0d9;margin-bottom:8px}
+  .track{height:12px;border-radius:99px;background:var(--deep-2);overflow:hidden}
+  .fill{height:100%;width:0;background:var(--spent);border-radius:99px;transition:width .4s ease}
+  .fill.over{background:#ff6b57}
+  .mini{display:flex;gap:10px;margin-top:18px}
+  .mini div{flex:1;background:var(--deep-2);border-radius:14px;padding:10px 12px}
+  .mini small{display:block;color:#b9cfc6;font-size:.78rem}
+  .mini b{font-size:1.05rem;font-weight:650}
+
+  /* Add form */
+  .add{padding:20px 18px 6px}
+  .seg{display:inline-flex;background:#e0e6e1;border-radius:12px;padding:3px;margin-bottom:12px}
+  .seg button{padding:7px 14px;border-radius:9px;font-size:.9rem;color:var(--muted)}
+  .seg button[aria-pressed="true"]{background:var(--paper);color:var(--ink);font-weight:650;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .fields{display:grid;grid-template-columns:1fr 130px;gap:10px}
+  input{
+    width:100%;padding:14px 14px;background:var(--paper);border:1.5px solid var(--line);
+    border-radius:14px;font-size:1rem;
+  }
+  input:focus{border-color:var(--deep);outline:none}
+  .go{
+    width:100%;margin-top:10px;padding:15px;border-radius:14px;background:var(--spent);
+    color:#1d1006;font-weight:700;font-size:1.02rem;
+  }
+  .go.income{background:var(--ok)}
+  .go:active{transform:scale(.99)}
+  .err{color:var(--danger);font-size:.88rem;margin-top:8px;min-height:1.1em}
+
+  /* List */
+  .list{padding:10px 18px 60px}
+  .day{margin-top:18px;display:flex;justify-content:space-between;font-size:.88rem;color:var(--muted);padding:0 2px 8px;border-bottom:1px solid var(--line)}
+  .row{display:flex;align-items:center;gap:12px;padding:13px 2px;border-bottom:1px solid var(--line)}
+  .row .name{font-weight:600;overflow-wrap:anywhere}
+  .row .time{font-size:.8rem;color:var(--muted);margin-top:2px}
+  .row .main{flex:1;min-width:0}
+  .amt{font-weight:700;white-space:nowrap}
+  .amt.in{color:#1d7a52}
+  .del{color:var(--muted);font-size:1.3rem;line-height:1;padding:6px 8px;border-radius:8px}
+  .del:hover{color:var(--danger)}
+  .empty{margin-top:28px;text-align:center;color:var(--muted);line-height:1.5}
+
+  /* Setup / sheet */
+  .overlay{position:fixed;inset:0;background:rgba(10,20,17,.55);display:none;align-items:flex-end;justify-content:center;z-index:10}
+  .overlay.open{display:flex}
+  .sheet{
+    background:var(--paper);width:100%;max-width:560px;border-radius:26px 26px 0 0;
+    padding:24px 20px calc(24px + env(safe-area-inset-bottom));max-height:92vh;overflow:auto;
+  }
+  .sheet h2{font-size:1.3rem;margin-bottom:6px}
+  .sheet p{color:var(--muted);font-size:.93rem;line-height:1.45;margin-bottom:14px}
+  .sheet label{display:block;font-size:.88rem;font-weight:600;margin:12px 0 6px}
+  .sheet .go{background:var(--deep);color:#fff}
+  .link{display:block;width:100%;text-align:center;padding:13px;margin-top:6px;color:var(--ink);font-size:.95rem}
+  .link.danger{color:var(--danger)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="warn" id="warn" role="alert">Saving is blocked in this browser, so your entries will be lost when you close the page. Open the app from its web link instead of a file, or use Settings &rarr; Back up data regularly.</div>
+
+  <section class="panel" aria-label="Balance">
+    <div class="topline"><span id="today-label"></span><button class="gear" id="open-settings">Settings</button></div>
+    <div class="balance-label">Balance now</div>
+    <div class="balance" id="balance">Rs 0</div>
+
+    <div class="month">
+      <div class="month-row"><span id="month-text">Spent this month</span><span id="month-of"></span></div>
+      <div class="track"><div class="fill" id="fill"></div></div>
+    </div>
+
+    <div class="mini">
+      <div><small>Spent today</small><b id="s-today">Rs 0</b></div>
+      <div><small>Spent this month</small><b id="s-month">Rs 0</b></div>
+    </div>
+  </section>
+
+  <section class="add" aria-label="Add entry">
+    <div class="seg" role="group" aria-label="Entry type">
+      <button id="t-exp" aria-pressed="true">Expense</button>
+      <button id="t-inc" aria-pressed="false">Income</button>
+    </div>
+    <div class="fields">
+      <input id="name" type="text" placeholder="What was it for?" autocomplete="off" maxlength="80" aria-label="Name">
+      <input id="amount" type="number" inputmode="decimal" placeholder="Amount" min="0" step="any" aria-label="Amount">
+    </div>
+    <button class="go" id="add-btn">Add expense</button>
+    <div class="err" id="err" role="alert"></div>
+  </section>
+
+  <section class="list" id="list" aria-label="History"></section>
+</div>
+
+<!-- First-time setup -->
+<div class="overlay" id="setup" role="dialog" aria-modal="true" aria-labelledby="setup-h">
+  <div class="sheet">
+    <h2 id="setup-h">Set up your tracker</h2>
+    <p>Enter these once. You can change them later in Settings.</p>
+    <label for="su-salary">Monthly salary</label>
+    <input id="su-salary" type="number" inputmode="decimal" placeholder="e.g. 150000" min="0" step="any">
+    <label for="su-balance">Money in your account right now</label>
+    <input id="su-balance" type="number" inputmode="decimal" placeholder="e.g. 85000" min="0" step="any">
+    <div class="err" id="su-err" role="alert"></div>
+    <button class="go" id="su-save">Start tracking</button>
+  </div>
+</div>
+
+<!-- Settings -->
+<div class="overlay" id="settings" role="dialog" aria-modal="true" aria-labelledby="set-h">
+  <div class="sheet">
+    <h2 id="set-h">Settings</h2>
+    <label for="st-salary">Monthly salary</label>
+    <input id="st-salary" type="number" inputmode="decimal" min="0" step="any">
+    <label for="st-balance">Correct current balance</label>
+    <input id="st-balance" type="number" inputmode="decimal" step="any">
+    <p style="margin-top:8px">Use this if your real account balance doesn't match the app.</p>
+    <button class="go" id="st-save">Save changes</button>
+    <button class="link" id="st-export">Download history as CSV</button>
+    <button class="link" id="st-backup">Back up data (file)</button>
+    <button class="link" id="st-restore">Restore from backup</button>
+    <input type="file" id="restore-file" accept="application/json,.json" style="display:none">
+    <button class="link danger" id="st-reset">Erase all data</button>
+    <button class="link" id="st-close">Close</button>
+  </div>
+</div>
+
+<script>
+const KEY = 'expense-tracker-v1';
+let state = { setup:false, salary:0, start:0, entries:[] };
+let mode = 'expense';
+const $ = id => document.getElementById(id);
+
+/* ---------- storage (works as a Claude artifact and as a normal web page) ---------- */
+async function load(){
+  try{
+    if (window.storage){
+      const r = await window.storage.get(KEY);
+      if (r && r.value) state = JSON.parse(r.value);
+    } else {
+      const v = localStorage.getItem(KEY);
+      if (v) state = JSON.parse(v);
+    }
+  }catch(e){ /* nothing saved yet */ }
+}
+async function save(){
+  const v = JSON.stringify(state);
+  let ok = false;
+  try{
+    if (window.storage){ await window.storage.set(KEY, v); ok = true; }
+    else { localStorage.setItem(KEY, v); ok = (localStorage.getItem(KEY) === v); }
+  }catch(e){ ok = false; }
+  $('warn').classList.toggle('show', !ok);
+}
+
+/* ---------- helpers ---------- */
+const money = n => 'Rs ' + Math.round(n).toLocaleString('en-PK');
+const sameDay = (a,b) => a.toDateString() === b.toDateString();
+function net(){ return state.entries.reduce((s,e)=> s + (e.type==='income'? e.amount : -e.amount), 0); }
+function balance(){ return state.start + net(); }
+
+/* ---------- render ---------- */
+function render(){
+  const now = new Date();
+  $('today-label').textContent = now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+
+  const bal = balance();
+  $('balance').textContent = (bal<0?'-':'') + money(Math.abs(bal));
+  $('balance').classList.toggle('low', bal < state.salary*0.1);
+
+  let today=0, month=0;
+  for (const e of state.entries){
+    if (e.type!=='expense') continue;
+    const d = new Date(e.ts);
+    if (sameDay(d, now)) today += e.amount;
+    if (d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear()) month += e.amount;
+  }
+  $('s-today').textContent = money(today);
+  $('s-month').textContent = money(month);
+
+  const pct = state.salary>0 ? month/state.salary*100 : 0;
+  $('fill').style.width = Math.min(pct,100) + '%';
+  $('fill').classList.toggle('over', pct>100);
+  $('month-text').textContent = state.salary>0 ? Math.round(pct) + '% of salary spent' : 'Spent this month';
+  $('month-of').textContent = state.salary>0 ? money(month) + ' / ' + money(state.salary) : '';
+
+  renderList();
+}
+
+function renderList(){
+  const list = $('list');
+  list.innerHTML = '';
+  if (!state.entries.length){
+    list.innerHTML = '<div class="empty">Nothing here yet.<br>Add your first expense above and it will show up with the date and time.</div>';
+    return;
+  }
+  const sorted = [...state.entries].sort((a,b)=> b.ts - a.ts);
+  let lastKey = '';
+  let dayTotals = {};
+  for (const e of sorted){
+    const k = new Date(e.ts).toDateString();
+    if (e.type==='expense') dayTotals[k] = (dayTotals[k]||0) + e.amount;
+  }
+  const today = new Date(), yest = new Date(Date.now()-864e5);
+  for (const e of sorted){
+    const d = new Date(e.ts), k = d.toDateString();
+    if (k !== lastKey){
+      lastKey = k;
+      const label = sameDay(d,today) ? 'Today' : sameDay(d,yest) ? 'Yesterday'
+        : d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+      const h = document.createElement('div');
+      h.className = 'day';
+      h.innerHTML = '<span></span><span></span>';
+      h.children[0].textContent = label;
+      h.children[1].textContent = dayTotals[k] ? 'Spent ' + money(dayTotals[k]) : '';
+      list.appendChild(h);
+    }
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<div class="main"><div class="name"></div><div class="time"></div></div><div class="amt"></div><button class="del" aria-label="Delete entry">&times;</button>';
+    row.querySelector('.name').textContent = e.name;
+    row.querySelector('.time').textContent = d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:true});
+    const a = row.querySelector('.amt');
+    a.textContent = (e.type==='income'?'+':'-') + money(e.amount);
+    if (e.type==='income') a.classList.add('in');
+    row.querySelector('.del').onclick = async () => {
+      if (!confirm('Delete "' + e.name + '" (' + money(e.amount) + ')?')) return;
+      state.entries = state.entries.filter(x => x.id !== e.id);
+      await save(); render();
+    };
+    list.appendChild(row);
+  }
+}
+
+/* ---------- actions ---------- */
+function setMode(m){
+  mode = m;
+  $('t-exp').setAttribute('aria-pressed', m==='expense');
+  $('t-inc').setAttribute('aria-pressed', m==='income');
+  $('add-btn').textContent = m==='expense' ? 'Add expense' : 'Add income';
+  $('add-btn').classList.toggle('income', m==='income');
+  $('name').placeholder = m==='expense' ? 'What was it for?' : 'Where did it come from?';
+}
+$('t-exp').onclick = () => setMode('expense');
+$('t-inc').onclick = () => setMode('income');
+
+async function addEntry(){
+  const name = $('name').value.trim();
+  const amount = parseFloat($('amount').value);
+  if (!name){ $('err').textContent = 'Give it a name first.'; $('name').focus(); return; }
+  if (!(amount > 0)){ $('err').textContent = 'Enter an amount greater than 0.'; $('amount').focus(); return; }
+  $('err').textContent = '';
+  state.entries.push({ id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), type: mode, name, amount, ts: Date.now() });
+  $('name').value = ''; $('amount').value = '';
+  $('name').focus();
+  await save(); render();
+}
+$('add-btn').onclick = addEntry;
+['name','amount'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key==='Enter') addEntry(); }));
+
+/* setup */
+$('su-save').onclick = async () => {
+  const salary = parseFloat($('su-salary').value);
+  const bal = parseFloat($('su-balance').value);
+  if (!(salary >= 0) || isNaN(salary)){ $('su-err').textContent = 'Enter your monthly salary.'; return; }
+  if (isNaN(bal)){ $('su-err').textContent = 'Enter your current account balance.'; return; }
+  state.salary = salary; state.start = bal; state.setup = true;
+  $('setup').classList.remove('open');
+  await save(); render();
+};
+
+/* settings */
+$('open-settings').onclick = () => {
+  $('st-salary').value = state.salary;
+  $('st-balance').value = Math.round(balance()*100)/100;
+  $('settings').classList.add('open');
+};
+$('st-close').onclick = () => $('settings').classList.remove('open');
+$('st-save').onclick = async () => {
+  const s = parseFloat($('st-salary').value), b = parseFloat($('st-balance').value);
+  if (!isNaN(s) && s >= 0) state.salary = s;
+  if (!isNaN(b)) state.start = b - net();
+  $('settings').classList.remove('open');
+  await save(); render();
+};
+$('st-export').onclick = () => {
+  const rows = [['Date','Time','Type','Name','Amount']];
+  [...state.entries].sort((a,b)=>a.ts-b.ts).forEach(e=>{
+    const d = new Date(e.ts);
+    rows.push([d.toLocaleDateString('en-GB'), d.toLocaleTimeString('en-GB'), e.type, '"'+e.name.replace(/"/g,'""')+'"', e.amount]);
+  });
+  const blob = new Blob([rows.map(r=>r.join(',')).join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'expenses.csv'; a.click();
+};
+$('st-backup').onclick = () => {
+  const blob = new Blob([JSON.stringify(state)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'expense-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+};
+$('st-restore').onclick = () => $('restore-file').click();
+$('restore-file').onchange = async (ev) => {
+  const f = ev.target.files[0]; if (!f) return;
+  try{
+    const data = JSON.parse(await f.text());
+    if (!data || !Array.isArray(data.entries)) throw new Error('bad');
+    if (!confirm('Replace current data with this backup?')) return;
+    state = data;
+    $('settings').classList.remove('open');
+    await save(); render();
+  }catch(e){ alert('That file is not a valid backup.'); }
+  ev.target.value = '';
+};
+$('st-reset').onclick = async () => {
+  if (!confirm('Erase everything? This cannot be undone.')) return;
+  state = { setup:false, salary:0, start:0, entries:[] };
+  await save();
+  $('settings').classList.remove('open');
+  $('su-salary').value = ''; $('su-balance').value = '';
+  $('setup').classList.add('open');
+  render();
+};
+
+/* start */
+(async () => {
+  await load();
+  if (!state.setup) $('setup').classList.add('open');
+  render();
+  await save();
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
+})();
+</script>
+</body>
+</html>
